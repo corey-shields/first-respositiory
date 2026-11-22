@@ -10,3 +10,7 @@ An original maze-chase arcade game in a single file: `index.html`. Open it in an
 - Bonus items appear mid-level; extra life at 10,000 points; speed rises each night.
 
 Controls: arrow keys or WASD, P to pause, M to mute. On phones, swipe or use the on-screen pad.
+
+## Daily List
+
+A simple to-do list in one file: `todo.html`. Type a task and press Add, tick the box when it's done, or click × to delete it. Your list is saved in your browser.
