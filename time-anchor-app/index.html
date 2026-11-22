@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time Anchor</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Time Anchor">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f4f2ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. Clock strip, the big draining dial, plain-words time, then controls. Dial is the hero. */
+:root {
+  --bg: #f4f2ee; --card: #ffffff; --ink: #20232b; --muted: #6c6f7a; --line: #e2ded6;
+  --calm: #2a9d8f; --soon: #e9a23b; --late: #e4572e; --track: #ebe7df;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15171c; --card: #1e2128; --ink: #eceef3; --muted: #9a9eab; --line: #2d313a;
+  --calm: #3cc2b2; --soon: #f0b45a; --late: #ff7a55; --track: #262a32; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #15171c; --card: #1e2128; --ink: #eceef3; --muted: #9a9eab; --line: #2d313a;
+  --calm: #3cc2b2; --soon: #f0b45a; --late: #ff7a55; --track: #262a32; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body);
+  padding-top: max(24px, calc(env(safe-area-inset-top, 0px) + 12px));
+  padding-bottom: max(40px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+  -webkit-tap-highlight-color: transparent;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { font: 700 1.7rem/1.1 var(--display); margin: 0; }
+.clock { font: 600 1.1rem var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.clock small { font: 500 0.75rem var(--body); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 6px; }
+
+.dial-wrap { position: relative; width: min(100%, 360px); aspect-ratio: 1; margin: 0 auto; max-width: 100%; }
+.dial-wrap svg { width: 100%; height: 100%; display: block; }
+.dial-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
+.big { font: 700 clamp(2.4rem, 12vw, 3.6rem)/1 var(--display); font-variant-numeric: tabular-nums;
+  background: var(--card); padding: 6px 14px; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.task-label { margin-top: 8px; font-weight: 600; max-width: 60%; overflow-wrap: anywhere; background: var(--card); padding: 2px 10px; border-radius: 8px; }
+
+.words { text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.words .left { font: 600 1.35rem/1.3 var(--display); text-wrap: balance; }
+.words .feels { color: var(--muted); }
+
+.timeline { display: flex; flex-direction: column; gap: 6px; }
+.bar { height: 12px; background: var(--track); border-radius: 99px; overflow: hidden; }
+.bar div { height: 100%; width: 0%; background: var(--calm); border-radius: 99px; transition: width 0.4s linear, background 0.6s; }
+.ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.banner { border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--card); border: 2px solid var(--soon); }
+.banner.end { border-color: var(--late); animation: pulse 1.2s ease-in-out infinite; }
+.banner p { margin: 0; font-weight: 500; }
+.banner .row { display: flex; gap: 8px; flex-wrap: wrap; }
+body.alarm { animation: flash 1s ease-in-out infinite; }
+@keyframes flash { 50% { background: color-mix(in srgb, var(--late) 30%, var(--bg)); } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--late) 25%, transparent); } }
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 0.9rem; }
+input[type="text"], input[type="time"], select {
+  font: inherit; font-weight: 400; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 11px; width: 100%; min-width: 0;
+}
+.tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border-radius: 10px; padding: 4px; gap: 4px; }
+.tabs button { border: 0; background: transparent; padding: 8px; border-radius: 7px; color: var(--muted); font-weight: 600; }
+.tabs button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 7px 14px; border-radius: 99px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.chips button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.chips input[type="number"] { width: 6.5em; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 7px 14px; }
+button { font: inherit; cursor: pointer; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.primary { flex: 1; background: var(--calm); color: #fff; border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 600; font-size: 1.05rem; }
+.secondary { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--calm); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 0.85rem; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .banner.end, body.alarm { animation: none; } .bar div { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Time Anchor</h1>
+    <div class="clock"><small>Now</small><span id="now">--:--</span></div>
+  </header>
+
+  <div class="dial-wrap">
+    <svg viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="92" fill="var(--track)"></circle>
+      <g id="ticks"></g>
+      <path id="wedge" fill="var(--calm)"></path>
+      <circle cx="100" cy="100" r="5" fill="var(--ink)"></circle>
+    </svg>
+    <div class="dial-center">
+      <div class="big" id="remaining">25:00</div>
+      <div class="task-label" id="task-label">Answer emails</div>
+    </div>
+  </div>
+
+  <div class="words" aria-live="polite">
+    <div class="left" id="words-left">25 minutes, ready to start</div>
+    <div class="feels" id="words-feels">That's about 7 songs</div>
+  </div>
+
+  <div class="timeline">
+    <div class="bar"><div id="bar-fill"></div></div>
+    <div class="ends"><span id="start-at">Starts when you press Start</span><span id="end-at"></span></div>
+  </div>
+
+  <div class="banner" id="checkin" hidden>
+    <p id="checkin-text"></p>
+    <div class="row"><button class="secondary" id="checkin-ok" type="button">Yes, still on it</button>
+      <button class="secondary" id="checkin-switch" type="button">I drifted, refocus me</button></div>
+  </div>
+
+  <div class="banner end" id="done-banner" hidden>
+    <p id="done-text">Time's up.</p>
+    <div class="row"><button class="secondary" id="more5" type="button">5 more minutes</button>
+      <button class="secondary" id="finish" type="button">I'm done</button></div>
+  </div>
+
+  <section class="panel" id="setup">
+    <label class="field">What are you doing?
+      <input type="text" id="task" value="Answer emails" autocomplete="off">
+    </label>
+
+    <div class="tabs" role="group" aria-label="Timer type">
+      <button type="button" id="mode-dur" aria-pressed="true">For a while</button>
+      <button type="button" id="mode-until" aria-pressed="false">Until a time</button>
+    </div>
+
+    <div id="dur-box" class="chips" role="group" aria-label="How long">
+      <button type="button" data-min="5" aria-pressed="false">5 min</button>
+      <button type="button" data-min="15" aria-pressed="false">15 min</button>
+      <button type="button" data-min="25" aria-pressed="true">25 min</button>
+      <button type="button" data-min="45" aria-pressed="false">45 min</button>
+      <input type="number" id="custom-min" min="1" max="240" placeholder="Other" aria-label="Custom minutes">
+    </div>
+
+    <div id="until-box" hidden>
+      <label class="field">I need to stop or leave at
+        <input type="time" id="until-time">
+      </label>
+    </div>
+
+    <label class="field">Gentle check-ins
+      <select id="checkins">
+        <option value="0">Off</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10" selected>Every 10 minutes</option>
+        <option value="15">Every 15 minutes</option>
+      </select>
+    </label>
+    <p class="hint">A soft chime and a quick “still on it?” so time can't slip away unnoticed. Keep the app open and your ringer on: iPhone mutes app sounds in silent mode, so the screen also flashes when time is up.</p>
+  </section>
+
+  <div class="actions">
+    <button class="primary" id="start" type="button">Start</button>
+    <button class="secondary" id="pause" type="button" hidden>Pause</button>
+    <button class="secondary" id="add5" type="button" hidden>+5 min</button>
+    <button class="secondary" id="stop" type="button" hidden>Stop</button>
+  </div>
+</main>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+
+// ----- State -----
+// We store the END time, not a countdown, so the timer stays accurate even if the tab sleeps.
+const s = {
+  mode: "dur", minutes: 25, untilTime: "",
+  running: false, paused: false,
+  startAt: 0, endAt: 0, total: 0, pausedLeft: 0,
+  checkEvery: 10, nextCheck: 0, finished: false,
+};
+
+// remember preferences
+try {
+  const p = JSON.parse(localStorage.getItem("time-anchor") || "{}");
+  if (p.task) $("task").value = p.task;
+  if (p.checkEvery !== undefined) { s.checkEvery = p.checkEvery; $("checkins").value = String(p.checkEvery); }
+  if (p.minutes) s.minutes = p.minutes;
+} catch (e) {}
+function savePrefs() {
+  try { localStorage.setItem("time-anchor", JSON.stringify({ task: $("task").value, checkEvery: s.checkEvery, minutes: s.minutes })); } catch (e) {}
+}
+
+// ----- Sound (starts only after a click) -----
+let ac = null;
+function chime(notes, gap = 0.22, vol = 0.12) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume();
+    notes.forEach((f, i) => {
+      const t = ac.currentTime + i * gap, o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1.3);
+    });
+  } catch (e) {}
+}
+const softChime = () => chime([659, 880]);
+const endChime = () => { chime([523, 659, 784, 1047]); setTimeout(() => chime([523, 659, 784, 1047]), 1600); };
+
+// Keep the screen awake while timing, where the browser allows it
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) {}
+}
+
+// ----- Helpers -----
+const fmtClock = d => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function fmtMMSS(ms) {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), r = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
+}
+function inWords(ms) {
+  const min = ms / 60000;
+  if (min < 1) return "Less than a minute";
+  if (min < 1.5) return "About 1 minute";
+  if (min < 60) return `About ${Math.round(min)} minutes`;
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return `About ${h} hour${h > 1 ? "s" : ""}${m ? ` ${m} min` : ""}`;
+}
+// Turn abstract minutes into something you can feel
+function feelsLike(ms) {
+  const min = ms / 60000;
+  if (min < 1) return "Time to wrap up";
+  if (min < 3) return "Long enough to make a cup of tea";
+  if (min < 8) return `That's about ${Math.round(min / 3.5)} songs`;
+  if (min < 12) return "About one shower";
+  if (min < 40) return `That's about ${Math.round(min / 3.5)} songs`;
+  if (min < 90) return `About ${Math.round(min / 22 * 2) / 2} TV episodes`;
+  return `About ${Math.round(min / 100 * 2) / 2} movies`;
+}
+function wedgePath(fraction) {
+  const cx = 100, cy = 100, r = 88;
+  if (fraction >= 0.9999) return `M${cx},${cy - r} A${r},${r} 0 1,1 ${cx - 0.01},${cy - r} Z`;
+  if (fraction <= 0) return "";
+  const a = fraction * 2 * Math.PI;
+  const x = cx + r * Math.sin(a), y = cy - r * Math.cos(a);
+  return `M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${fraction > 0.5 ? 1 : 0},1 ${x},${y} Z`;
+}
+function colorFor(fraction, leftMs) {
+  if (leftMs < 60000 || fraction < 0.1) return "var(--late)";
+  if (fraction < 0.3) return "var(--soon)";
+  return "var(--calm)";
+}
+// ticks around the dial
+(() => {
+  let html = "";
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * 2 * Math.PI, r1 = i % 3 === 0 ? 80 : 84;
+    html += `<line x1="${100 + r1 * Math.sin(a)}" y1="${100 - r1 * Math.cos(a)}" x2="${100 + 91 * Math.sin(a)}" y2="${100 - 91 * Math.cos(a)}" stroke="var(--muted)" stroke-width="${i % 3 === 0 ? 2 : 1}" stroke-linecap="round" opacity="0.5"/>`;
+  }
+  $("ticks").innerHTML = html;
+})();
+
+// How long the timer would run if started now
+function plannedMs() {
+  if (s.mode === "dur") return s.minutes * 60000;
+  if (!s.untilTime) return 0;
+  const [h, m] = s.untilTime.split(":").map(Number);
+  const end = new Date(); end.setHours(h, m, 0, 0);
+  if (end <= new Date()) end.setDate(end.getDate() + 1);
+  return end - Date.now();
+}
+
+// ----- Drawing -----
+function render() {
+  const now = Date.now();
+  $("now").textContent = fmtClock(new Date(now));
+  const label = $("task").value.trim();
+  $("task-label").textContent = label || "Focus time";
+  $("task-label").hidden = false;
+
+  let left, total;
+  if (s.running) {
+    left = s.paused ? s.pausedLeft : Math.max(0, s.endAt - now);
+    total = s.total;
+  } else {
+    left = total = plannedMs();
+  }
+  const fraction = total ? left / total : 0;
+  $("wedge").setAttribute("d", wedgePath(fraction));
+  $("wedge").setAttribute("fill", colorFor(fraction, s.running ? left : Infinity));
+  $("remaining").textContent = fmtMMSS(left);
+
+  if (!s.running) {
+    $("words-left").textContent = total ? `${inWords(total).replace("About ", "")}, ready to start` : "Pick a time to stop";
+    $("words-feels").textContent = total ? feelsLike(total) : "";
+    $("bar-fill").style.width = "0%";
+    $("start-at").textContent = "Starts when you press Start";
+    $("end-at").textContent = total ? `Would end at ${fmtClock(new Date(now + total))}` : "";
+    document.title = "Time Anchor";
+    return;
+  }
+
+  $("words-left").textContent = s.finished ? "Time's up" : `${inWords(left)} left${s.paused ? " (paused)" : ""}`;
+  $("words-feels").textContent = s.finished ? `You spent ${inWords(s.total).toLowerCase().replace("about ", "")} on this` : feelsLike(left);
+  const used = 1 - fraction;
+  $("bar-fill").style.width = `${Math.min(100, used * 100)}%`;
+  $("bar-fill").style.background = colorFor(fraction, left);
+  $("start-at").textContent = `Started ${fmtClock(new Date(s.startAt))}`;
+  $("end-at").textContent = s.paused ? "Paused" : `Ends ${fmtClock(new Date(s.endAt))}`;
+  document.title = s.finished ? "⏰ Time's up · Time Anchor" : `${fmtMMSS(left)} · ${label || "Time Anchor"}`;
+}
+
+function tick() {
+  if (s.running && !s.paused && !s.finished) {
+    const now = Date.now();
+    if (now >= s.endAt) finish();
+    else if (s.checkEvery && now >= s.nextCheck) {
+      s.nextCheck += s.checkEvery * 60000;
+      const elapsed = Math.round((now - s.startAt) / 60000);
+      const label = $("task").value.trim() || "your task";
+      $("checkin-text").textContent = `${elapsed} minutes have passed. Still working on “${label}”? ${inWords(s.endAt - now)} left.`;
+      $("checkin").hidden = false;
+      softChime();
+    }
+  }
+  render();
+}
+
+// ----- Actions -----
+function start() {
+  const ms = plannedMs();
+  if (!ms) { $("until-time").focus(); return; }
+  const now = Date.now();
+  Object.assign(s, { running: true, paused: false, finished: false, startAt: now, endAt: now + ms, total: ms });
+  s.nextCheck = now + s.checkEvery * 60000;
+  savePrefs();
+  chime([880], 0.2, 0.06);
+  keepAwake(true);
+  setRunningUI(true);
+  render();
+}
+function finish() {
+  s.finished = true;
+  $("checkin").hidden = true;
+  $("done-text").textContent = `Time's up for “${$("task").value.trim() || "your task"}”. It's ${fmtClock(new Date())}.`;
+  $("done-banner").hidden = false;
+  $("pause").hidden = true;
+  endChime();
+  document.body.classList.add("alarm");
+}
+function addFive() {
+  if (s.paused) { s.pausedLeft += 300000; }
+  else {
+    const now = Date.now();
+    document.body.classList.remove("alarm");
+    if (s.finished) { s.endAt = now; s.finished = false; $("done-banner").hidden = true; $("pause").hidden = false; }
+    s.endAt += 300000;
+  }
+  s.total += 300000;
+  render();
+}
+function togglePause() {
+  if (!s.running || s.finished) return;
+  if (!s.paused) { s.pausedLeft = s.endAt - Date.now(); s.paused = true; $("pause").textContent = "Resume"; }
+  else {
+    const now = Date.now();
+    s.endAt = now + s.pausedLeft;
+    s.nextCheck = now + s.checkEvery * 60000;
+    s.paused = false; $("pause").textContent = "Pause";
+  }
+  render();
+}
+function stop() {
+  document.body.classList.remove("alarm");
+  Object.assign(s, { running: false, paused: false, finished: false });
+  $("checkin").hidden = true; $("done-banner").hidden = true;
+  $("pause").textContent = "Pause";
+  keepAwake(false);
+  setRunningUI(false);
+  render();
+}
+function setRunningUI(on) {
+  $("setup").hidden = on;
+  $("start").hidden = on;
+  $("pause").hidden = !on; $("add5").hidden = !on; $("stop").hidden = !on;
+}
+
+// ----- Wiring -----
+$("start").onclick = start;
+$("pause").onclick = togglePause;
+$("add5").onclick = addFive;
+$("more5").onclick = addFive;
+$("stop").onclick = stop;
+$("finish").onclick = stop;
+$("checkin-ok").onclick = () => { $("checkin").hidden = true; };
+$("checkin-switch").onclick = () => {
+  $("checkin").hidden = true;
+  const label = $("task").value.trim() || "your task";
+  $("words-feels").textContent = `Back to “${label}”. Just the next tiny step.`;
+  chime([523, 784], 0.15, 0.08);
+};
+
+function setMode(m) {
+  s.mode = m;
+  $("mode-dur").setAttribute("aria-pressed", String(m === "dur"));
+  $("mode-until").setAttribute("aria-pressed", String(m === "until"));
+  $("dur-box").hidden = m !== "dur";
+  $("until-box").hidden = m !== "until";
+  if (m === "until" && !s.untilTime) {
+    const d = new Date(Date.now() + 30 * 60000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);
+    s.untilTime = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes() % 60).padStart(2, "0")}`;
+    $("until-time").value = s.untilTime;
+  }
+  render();
+}
+$("mode-dur").onclick = () => setMode("dur");
+$("mode-until").onclick = () => setMode("until");
+$("until-time").oninput = e => { s.untilTime = e.target.value; render(); };
+
+function pickMinutes(min) {
+  s.minutes = min;
+  document.querySelectorAll("#dur-box button").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.min) === min)));
+  render();
+}
+document.querySelectorAll("#dur-box button").forEach(b => b.onclick = () => { $("custom-min").value = ""; pickMinutes(Number(b.dataset.min)); });
+$("custom-min").oninput = e => { const v = Math.round(Number(e.target.value)); if (v >= 1 && v <= 240) pickMinutes(v); };
+$("checkins").onchange = e => { s.checkEvery = Number(e.target.value); savePrefs(); };
+$("task").oninput = render;
+document.addEventListener("keydown", e => {
+  if (e.key === " " && s.running && e.target.tagName !== "INPUT" && e.target.tagName !== "BUTTON") { e.preventDefault(); togglePause(); }
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && s.running && !s.finished) keepAwake(true); });
+
+pickMinutes(s.minutes);
+if (![5, 15, 25, 45].includes(s.minutes)) $("custom-min").value = s.minutes;
+setInterval(tick, 250);
+render();
+
+// Offline support: cache the app so it opens without internet
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+})();
+</script>
+</body>
+</html>
